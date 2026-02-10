@@ -36,6 +36,20 @@ const PROJECT_NAMES = {
 // Results storage directory
 const RESULTS_DIR = path.join(__dirname, 'results');
 
+// Security: Validate projectId to prevent path traversal
+function isValidProjectId(projectId) {
+  // Only allow alphanumeric, dash, and underscore
+  return /^[a-zA-Z0-9_-]+$/.test(projectId);
+}
+
+// Security: Sanitize grep parameter to prevent command injection
+function sanitizeGrep(grep) {
+  if (!grep) return null;
+  // Only allow alphanumeric, spaces, @, and common test tag characters
+  const sanitized = grep.replace(/[^a-zA-Z0-9\s@_-]/g, '');
+  return sanitized.length > 0 && sanitized.length <= 100 ? sanitized : null;
+}
+
 // Ensure results directory exists
 async function ensureResultsDir() {
   try {
@@ -99,6 +113,17 @@ app.get('/api/projects', async (req, res) => {
 app.get('/api/results/:projectId', async (req, res) => {
   const { projectId } = req.params;
 
+  // Security: Validate projectId to prevent path traversal
+  if (!isValidProjectId(projectId)) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
+
+  // Security: Verify project exists in discovered projects
+  const projects = await discoverProjects();
+  if (!projects[projectId]) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
   try {
     const resultsFile = path.join(RESULTS_DIR, `${projectId}.json`);
     const data = await fs.readFile(resultsFile, 'utf-8');
@@ -150,6 +175,11 @@ app.post('/api/run/:projectId', async (req, res) => {
   const { projectId } = req.params;
   const { grep } = req.body;
 
+  // Security: Validate projectId
+  if (!isValidProjectId(projectId)) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
+
   const projects = await discoverProjects();
   const config = projects[projectId];
 
@@ -157,10 +187,13 @@ app.post('/api/run/:projectId', async (req, res) => {
     return res.status(404).json({ error: 'Project not found' });
   }
 
+  // Security: Sanitize grep parameter
+  const safeGrep = sanitizeGrep(grep);
+
   res.json({ message: 'Tests started', projectId });
 
   // Run tests in background
-  runTestsForProject(projectId, config, grep).catch(err => {
+  runTestsForProject(projectId, config, safeGrep).catch(err => {
     console.error(`Error running tests for ${projectId}:`, err);
   });
 });
@@ -168,13 +201,17 @@ app.post('/api/run/:projectId', async (req, res) => {
 // Run tests for all projects
 app.post('/api/run-all', async (req, res) => {
   const { grep } = req.body;
+
+  // Security: Sanitize grep parameter
+  const safeGrep = sanitizeGrep(grep);
+
   const projects = await discoverProjects();
 
   res.json({ message: 'Running tests for all projects', projects: Object.keys(projects) });
 
   for (const [projectId, config] of Object.entries(projects)) {
     try {
-      await runTestsForProject(projectId, config, grep);
+      await runTestsForProject(projectId, config, safeGrep);
     } catch (err) {
       console.error(`Error running tests for ${projectId}:`, err);
     }
@@ -293,6 +330,17 @@ async function runTestsForProject(projectId, config, grep) {
 // Get test run history for a project
 app.get('/api/history/:projectId', async (req, res) => {
   const { projectId } = req.params;
+
+  // Security: Validate projectId to prevent path traversal
+  if (!isValidProjectId(projectId)) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
+
+  // Security: Verify project exists in discovered projects
+  const projects = await discoverProjects();
+  if (!projects[projectId]) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
 
   try {
     const resultsFile = path.join(RESULTS_DIR, `${projectId}.json`);
