@@ -91,6 +91,9 @@ async function discoverProjects() {
     const dirs = await fs.readdir(PROJECTS_BASE);
 
     for (const dir of dirs) {
+      // Skip self-testing - test-dashboard's E2E tests run in CI/CD, not from its own UI
+      if (dir === 'test-dashboard') continue;
+
       const backendPath = path.join(PROJECTS_BASE, dir, 'backend');
       const e2ePath = path.join(backendPath, 'e2e');
       const playwrightConfig = path.join(backendPath, 'playwright.config.js');
