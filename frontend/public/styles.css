@@ -272,12 +272,13 @@ section h2 {
   padding: 0;
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.3s ease-out;
+  transition: max-height 0.3s ease-out, padding 0.3s ease-out;
 }
 
 .test-list.expanded {
-  max-height: 1000px;
+  max-height: none;
   padding: 0.5rem 0;
+  overflow: visible;
 }
 
 .test-item {

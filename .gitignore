@@ -4,3 +4,4 @@ backend/coverage/
 *.log
 .env
 .DS_Store
+backend/test-results/
