@@ -353,3 +353,90 @@ describe('CORS', () => {
     expect(response.headers['access-control-allow-origin']).toBeDefined();
   });
 });
+
+// Conditional tests for when mock-project exists (CI environment)
+describe('Success Scenarios (with mock project)', () => {
+  let mockProjectExists = false;
+
+  beforeAll(async () => {
+    // Check if mock-project exists (created by CI)
+    const projects = await discoverProjects();
+    mockProjectExists = 'mock-project' in projects;
+
+    if (mockProjectExists) {
+      // Set up test results file for mock-project
+      await fs.mkdir(RESULTS_DIR, { recursive: true });
+      const testResults = {
+        runs: [{
+          id: '123',
+          timestamp: new Date().toISOString(),
+          stats: { passed: 5, failed: 1, skipped: 0, total: 6 },
+          suites: []
+        }],
+        lastRun: {
+          id: '123',
+          timestamp: new Date().toISOString(),
+          stats: { passed: 5, failed: 1, skipped: 0, total: 6 }
+        }
+      };
+      await fs.writeFile(
+        path.join(RESULTS_DIR, 'mock-project.json'),
+        JSON.stringify(testResults)
+      );
+    }
+  });
+
+  afterAll(async () => {
+    try {
+      await fs.unlink(path.join(RESULTS_DIR, 'mock-project.json'));
+    } catch (err) {
+      // File may not exist
+    }
+  });
+
+  test('validateAndGetProject returns project for valid discovered project', async () => {
+    if (!mockProjectExists) {
+      console.log('Skipping: mock-project not available');
+      return;
+    }
+    const result = await validateAndGetProject('mock-project');
+    expect(result.project).toBeDefined();
+    expect(result.project.id).toBe('mock-project');
+    expect(result.error).toBeUndefined();
+  });
+
+  test('GET /api/results/:projectId returns results for valid project', async () => {
+    if (!mockProjectExists) {
+      console.log('Skipping: mock-project not available');
+      return;
+    }
+    const response = await request(app).get('/api/results/mock-project');
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('runs');
+    expect(response.body).toHaveProperty('lastRun');
+  });
+
+  test('GET /api/history/:projectId returns history for valid project', async () => {
+    if (!mockProjectExists) {
+      console.log('Skipping: mock-project not available');
+      return;
+    }
+    const response = await request(app).get('/api/history/mock-project');
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.length).toBeGreaterThan(0);
+  });
+
+  test('POST /api/run/:projectId starts tests for valid project', async () => {
+    if (!mockProjectExists) {
+      console.log('Skipping: mock-project not available');
+      return;
+    }
+    const response = await request(app)
+      .post('/api/run/mock-project')
+      .send({ grep: '@smoke' });
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe('Tests started');
+    expect(response.body.projectId).toBe('mock-project');
+  });
+});

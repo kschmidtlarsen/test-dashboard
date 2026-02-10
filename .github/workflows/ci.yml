@@ -28,6 +28,11 @@ jobs:
       - name: Run linter
         run: cd backend && npm run lint --if-present
 
+      - name: Setup mock project directory for tests
+        run: |
+          sudo mkdir -p /var/www/mock-project/backend/e2e
+          echo 'module.exports = {};' | sudo tee /var/www/mock-project/backend/playwright.config.js
+
       - name: Run tests
         run: cd backend && npm test --if-present
 
