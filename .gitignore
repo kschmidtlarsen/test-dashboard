@@ -5,3 +5,4 @@ backend/coverage/
 .env
 .DS_Store
 backend/test-results/
+backend/playwright-report/

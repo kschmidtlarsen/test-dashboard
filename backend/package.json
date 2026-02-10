@@ -10,6 +10,7 @@
     "test:ci": "jest --coverage --ci",
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:upload": "node scripts/upload-results.js",
     "run-tests": "node scripts/run-tests.js"
   },
   "dependencies": {

@@ -83,6 +83,9 @@ async function ensureResultsDir() {
   }
 }
 
+// Projects that cannot run tests from UI (self-testing, special cases)
+const SELF_TEST_PROJECTS = ['test-dashboard'];
+
 // Discover projects dynamically
 async function discoverProjects() {
   const projects = {};
@@ -91,9 +94,6 @@ async function discoverProjects() {
     const dirs = await fs.readdir(PROJECTS_BASE);
 
     for (const dir of dirs) {
-      // Skip self-testing - test-dashboard's E2E tests run in CI/CD, not from its own UI
-      if (dir === 'test-dashboard') continue;
-
       const backendPath = path.join(PROJECTS_BASE, dir, 'backend');
       const e2ePath = path.join(backendPath, 'e2e');
       const playwrightConfig = path.join(backendPath, 'playwright.config.js');
@@ -105,12 +105,14 @@ async function discoverProjects() {
 
         if (e2eStats.isDirectory() && configStats.isFile()) {
           const port = PROJECT_PORTS[dir] || 3000;
+          const canRunFromUI = !SELF_TEST_PROJECTS.includes(dir);
           projects[dir] = {
             id: dir,
             name: PROJECT_NAMES[dir] || dir,
             path: backendPath,
             baseUrl: `http://192.168.0.120:${port}`,
-            port
+            port,
+            canRunFromUI
           };
         }
       } catch (err) {
@@ -199,6 +201,14 @@ app.post('/api/run/:projectId', async (req, res) => {
     return res.status(validation.status).json({ error: validation.error });
   }
 
+  // Check if project can run tests from UI
+  if (!validation.project.canRunFromUI) {
+    return res.status(400).json({
+      error: `Tests for ${projectId} run via CI/CD pipeline, not from UI`,
+      message: 'Results are uploaded automatically after CI/CD runs'
+    });
+  }
+
   const safeGrep = sanitizeGrep(grep);
   res.json({ message: 'Tests started', projectId });
 
@@ -216,16 +226,80 @@ app.post('/api/run-all', async (req, res) => {
   const safeGrep = sanitizeGrep(grep);
 
   const projects = await discoverProjects();
+  // Filter to only projects that can run from UI
+  const runnableProjects = Object.entries(projects)
+    .filter(([, config]) => config.canRunFromUI);
 
-  res.json({ message: 'Running tests for all projects', projects: Object.keys(projects) });
+  res.json({
+    message: 'Running tests for all projects',
+    projects: runnableProjects.map(([id]) => id),
+    skipped: Object.keys(projects).filter(id => !projects[id].canRunFromUI)
+  });
 
-  for (const [projectId, config] of Object.entries(projects)) {
+  for (const [projectId, config] of runnableProjects) {
     try {
       await runTestsForProject(projectId, config, safeGrep);
     } catch (err) {
       console.error(`Error running tests for ${projectId}:`, err);
     }
   }
+});
+
+// Upload test results (for CI/CD integration)
+app.post('/api/upload/:projectId', async (req, res) => {
+  const { projectId } = req.params;
+
+  if (!isValidProjectId(projectId)) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
+
+  const { stats, suites, errors, source } = req.body;
+
+  if (!stats || typeof stats !== 'object') {
+    return res.status(400).json({ error: 'Invalid stats object' });
+  }
+
+  await ensureResultsDir();
+
+  // Create run record
+  const run = {
+    id: Date.now().toString(),
+    timestamp: new Date().toISOString(),
+    stats: {
+      total: stats.total || 0,
+      passed: stats.passed || 0,
+      failed: stats.failed || 0,
+      skipped: stats.skipped || 0,
+      duration: stats.duration || 0
+    },
+    source: source || 'ci-upload',
+    exitCode: stats.failed > 0 ? 1 : 0,
+    suites: suites || [],
+    errors: errors || []
+  };
+
+  // Load existing results
+  let existingData = { runs: [] };
+  try {
+    const existingFile = await fs.readFile(path.join(RESULTS_DIR, `${projectId}.json`), 'utf-8');
+    existingData = JSON.parse(existingFile);
+  } catch (err) {
+    // File doesn't exist yet
+  }
+
+  // Add new run (keep last 20 runs)
+  existingData.runs.unshift(run);
+  existingData.runs = existingData.runs.slice(0, 20);
+  existingData.lastRun = run;
+
+  // Save results
+  await fs.writeFile(
+    path.join(RESULTS_DIR, `${projectId}.json`),
+    JSON.stringify(existingData, null, 2)
+  );
+
+  console.log(`Results uploaded for ${projectId}: ${run.stats.passed}/${run.stats.total} passed (source: ${run.source})`);
+  res.json({ message: 'Results uploaded', run });
 });
 
 // Function to run tests and save results
