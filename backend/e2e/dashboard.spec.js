@@ -5,38 +5,66 @@ test.describe('Test Dashboard', () => {
     await page.goto('/');
   });
 
-  test('should load the dashboard with correct title', async ({ page }) => {
+  test('should load the dashboard with correct title', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Verifies the page title is "E2E Test Dashboard" and the header h1 element displays the same text.'
+    });
     await expect(page).toHaveTitle('E2E Test Dashboard');
     await expect(page.locator('header h1')).toHaveText('E2E Test Dashboard');
   });
 
-  test('should display header action buttons', async ({ page }) => {
+  test('should display header action buttons', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Checks that the "Run All Tests" button (#runAllBtn) and "Refresh" button (#refreshBtn) are visible in the header.'
+    });
     await expect(page.locator('#runAllBtn')).toBeVisible();
     await expect(page.locator('#refreshBtn')).toBeVisible();
   });
 
-  test('should display overview section', async ({ page }) => {
+  test('should display overview section', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Verifies the Overview section exists with an h2 heading and the summary cards container (#summaryCards) is visible.'
+    });
     await expect(page.locator('section.summary-section h2')).toHaveText('Overview');
     await expect(page.locator('#summaryCards')).toBeVisible();
   });
 
-  test('should display test results section with filters', async ({ page }) => {
+  test('should display test results section with filters', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Checks that the Test Results section has an h2 heading and both the project filter (#projectFilter) and status filter (#statusFilter) dropdowns are visible.'
+    });
     await expect(page.locator('section.details-section h2')).toHaveText('Test Results');
     await expect(page.locator('#projectFilter')).toBeVisible();
     await expect(page.locator('#statusFilter')).toBeVisible();
   });
 
-  test('should display run history section', async ({ page }) => {
+  test('should display run history section', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Verifies the Run History section exists with an h2 heading and the history container (#historyContainer) is visible.'
+    });
     await expect(page.locator('section.history-section h2')).toHaveText('Run History');
     await expect(page.locator('#historyContainer')).toBeVisible();
   });
 
-  test('project filter should have "All Projects" option', async ({ page }) => {
+  test('project filter should have "All Projects" option', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Checks that the project filter dropdown contains an "All Projects" option with value="all".'
+    });
     const option = page.locator('#projectFilter option[value="all"]');
     await expect(option).toHaveText('All Projects');
   });
 
-  test('status filter should have all status options', async ({ page }) => {
+  test('status filter should have all status options', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Verifies the status filter dropdown contains all four options: All Status, Passed, Failed, and Skipped.'
+    });
     await expect(page.locator('#statusFilter option[value="all"]')).toHaveText('All Status');
     await expect(page.locator('#statusFilter option[value="passed"]')).toHaveText('Passed');
     await expect(page.locator('#statusFilter option[value="failed"]')).toHaveText('Failed');
@@ -51,7 +79,11 @@ test.describe('Project Accordion', () => {
     await page.waitForSelector('#resultsContainer', { timeout: 5000 });
   });
 
-  test('should expand project when header is clicked', async ({ page }) => {
+  test('should expand project when header is clicked', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Tests the accordion toggle behavior: 1) Finds project headers, 2) Clicks to expand and verifies .expanded class is added, 3) Clicks again to collapse and verifies .expanded class is removed.'
+    });
     // Check if there are any project results
     const projectHeaders = page.locator('.project-header');
     const count = await projectHeaders.count();
@@ -85,7 +117,11 @@ test.describe('Project Accordion', () => {
     }
   });
 
-  test('expanded accordion should show all tests without overflow', async ({ page }) => {
+  test('expanded accordion should show all tests without overflow', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Verifies the CSS fix for accordion overflow: 1) Expands a project, 2) Checks that max-height is "none" (not a fixed value), 3) Checks that overflow is "visible" (not hidden/clipped).'
+    });
     const projectHeaders = page.locator('.project-header');
     const count = await projectHeaders.count();
 
@@ -123,7 +159,11 @@ test.describe('Project Accordion', () => {
     }
   });
 
-  test('all test items should be fully visible when accordion is expanded', async ({ page }) => {
+  test('all test items should be fully visible when accordion is expanded', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Ensures no tests are cut off: 1) Expands a project accordion, 2) Iterates through ALL test items, 3) Verifies each item is visible and not clipped by the parent container.'
+    });
     const projectHeaders = page.locator('.project-header');
     const count = await projectHeaders.count();
 
@@ -163,7 +203,11 @@ test.describe('Project Accordion', () => {
 });
 
 test.describe('API Health', () => {
-  test('health endpoint should return healthy status', async ({ request }) => {
+  test('health endpoint should return healthy status', async ({ request }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Calls GET /health and verifies response contains {status: "healthy", service: "test-dashboard"}.'
+    });
     const response = await request.get('/health');
     expect(response.ok()).toBeTruthy();
 
@@ -172,7 +216,11 @@ test.describe('API Health', () => {
     expect(data.service).toBe('test-dashboard');
   });
 
-  test('projects endpoint should return array', async ({ request }) => {
+  test('projects endpoint should return array', async ({ request }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Calls GET /api/projects and verifies the response is an array of project objects.'
+    });
     const response = await request.get('/api/projects');
     expect(response.ok()).toBeTruthy();
 
@@ -180,7 +228,11 @@ test.describe('API Health', () => {
     expect(Array.isArray(data)).toBe(true);
   });
 
-  test('results summary endpoint should return object', async ({ request }) => {
+  test('results summary endpoint should return object', async ({ request }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Calls GET /api/results and verifies the response is an object containing test results summary for all projects.'
+    });
     const response = await request.get('/api/results');
     expect(response.ok()).toBeTruthy();
 
@@ -194,7 +246,11 @@ test.describe('UI Interactions', () => {
     await page.goto('/');
   });
 
-  test('refresh button should reload results', async ({ page }) => {
+  test('refresh button should reload results', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Clicks the refresh button (#refreshBtn) and verifies no error toast appears. If a toast is shown, it should not have the "error" class.'
+    });
     // Click refresh button
     await page.locator('#refreshBtn').click();
 
@@ -210,7 +266,11 @@ test.describe('UI Interactions', () => {
     }
   });
 
-  test('loading overlay should be hidden initially', async ({ page }) => {
+  test('loading overlay should be hidden initially', async ({ page }, testInfo) => {
+    testInfo.annotations.push({
+      type: 'description',
+      description: 'Verifies the loading spinner overlay (#loadingOverlay) has the "hidden" class when the page first loads.'
+    });
     const loadingOverlay = page.locator('#loadingOverlay');
     await expect(loadingOverlay).toHaveClass(/hidden/);
   });

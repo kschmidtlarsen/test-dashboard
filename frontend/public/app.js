@@ -5,6 +5,7 @@ const API_BASE = window.location.origin;
 let projects = [];
 let results = {};
 let expandedProjects = new Set();
+let expandedTests = new Set();
 
 // DOM Elements
 const summaryCards = document.getElementById('summaryCards');
@@ -148,15 +149,39 @@ async function renderResults() {
           </div>
         </div>
         <div class="test-list ${isExpanded ? 'expanded' : ''}" id="tests-${project.id}">
-          ${tests.map(t => `
-            <div class="test-item">
-              <div class="test-name">
-                <span class="test-status-icon ${t.status}">${getStatusIcon(t.status)}</span>
-                <span>${t.title}</span>
+          ${tests.map((t, idx) => {
+            const testId = `${project.id}-test-${idx}`;
+            const isTestExpanded = expandedTests.has(testId);
+            return `
+              <div class="test-item-wrapper">
+                <div class="test-item" onclick="toggleTestDetails('${testId}')">
+                  <div class="test-name">
+                    <span class="test-status-icon ${t.status}">${getStatusIcon(t.status)}</span>
+                    <span>${t.title}</span>
+                  </div>
+                  <div class="test-meta">
+                    <span class="test-duration">${t.duration}ms</span>
+                    ${t.description ? '<span class="test-info-icon" title="Click for details">ℹ</span>' : ''}
+                  </div>
+                </div>
+                <div class="test-details ${isTestExpanded ? 'expanded' : ''}" id="details-${testId}">
+                  ${t.description ? `
+                    <div class="test-description">
+                      <strong>What this test does:</strong>
+                      <p>${t.description}</p>
+                    </div>
+                  ` : ''}
+                  ${t.file ? `<div class="test-file"><strong>File:</strong> ${t.file}:${t.line}</div>` : ''}
+                  ${t.errors && t.errors.length > 0 ? `
+                    <div class="test-errors">
+                      <strong>Errors:</strong>
+                      <pre>${t.errors.map(e => e.message || e).join('\n')}</pre>
+                    </div>
+                  ` : ''}
+                </div>
               </div>
-              <span class="test-duration">${t.duration}ms</span>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       `;
 
@@ -186,15 +211,24 @@ function extractTests(suites, statusFilter) {
 
       for (const spec of suite.specs || []) {
         for (const test of spec.tests || []) {
-          const status = test.results?.[0]?.status || 'unknown';
+          const result = test.results?.[0];
+          const status = result?.status || 'unknown';
           const normalizedStatus = status === 'expected' ? 'passed' :
                                    status === 'unexpected' ? 'failed' : status;
 
           if (statusFilter === 'all' || normalizedStatus === statusFilter) {
+            // Extract description from annotations
+            const descAnnotation = test.annotations?.find(a => a.type === 'description');
+            const description = descAnnotation?.description || null;
+
             tests.push({
               title: `${suiteName} > ${spec.title}`,
               status: normalizedStatus,
-              duration: test.results?.[0]?.duration || 0
+              duration: result?.duration || 0,
+              description: description,
+              file: spec.file || null,
+              line: spec.line || null,
+              errors: result?.errors || []
             });
           }
         }
@@ -206,6 +240,20 @@ function extractTests(suites, statusFilter) {
 
   traverse(suites);
   return tests;
+}
+
+// Toggle test details
+function toggleTestDetails(testId) {
+  if (expandedTests.has(testId)) {
+    expandedTests.delete(testId);
+  } else {
+    expandedTests.add(testId);
+  }
+
+  const details = document.getElementById(`details-${testId}`);
+  if (details) {
+    details.classList.toggle('expanded');
+  }
 }
 
 // Render history
@@ -279,10 +327,18 @@ async function runTests(projectId) {
   showLoading(true);
 
   try {
-    await fetch(`${API_BASE}/api/run/${projectId}`, {
+    const res = await fetch(`${API_BASE}/api/run/${projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showToast(data.error || 'Failed to start tests', 'error');
+      showLoading(false);
+      return;
+    }
 
     showToast(`Tests started for ${projectId}`, 'success');
 
@@ -398,6 +454,7 @@ function showToast(message, type = 'info') {
 window.runTests = runTests;
 window.runAllTests = runAllTests;
 window.toggleProject = toggleProject;
+window.toggleTestDetails = toggleTestDetails;
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', init);
