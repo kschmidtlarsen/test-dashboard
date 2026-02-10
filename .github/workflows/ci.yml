@@ -45,29 +45,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
       - name: Deploy to Pi Cluster
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-        run: |
-          ssh -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} << 'EOF'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 192.168.0.120
+          username: kristian
+          password: ${{ secrets.PI_PASSWORD }}
+          script: |
             cd /var/www/test-dashboard
             git stash
             git pull origin main
             cd backend && npm ci --production
             pm2 restart test-dashboard
-          EOF
 
       - name: Verify Deployment
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-        run: |
-          ssh -o StrictHostKeyChecking=no ${SSH_USER}@${SSH_HOST} 'pm2 status test-dashboard && curl -sf http://localhost:3030/health'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 192.168.0.120
+          username: kristian
+          password: ${{ secrets.PI_PASSWORD }}
+          script: |
+            pm2 status test-dashboard
+            curl -sf http://localhost:3030/health
