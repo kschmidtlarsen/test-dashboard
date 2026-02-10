@@ -16,8 +16,8 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend/public')));
 
-// Base path for projects on Pi cluster
-const PROJECTS_BASE = '/var/www';
+// Base path for projects on Pi cluster (configurable for testing)
+const PROJECTS_BASE = process.env.PROJECTS_BASE || '/var/www';
 
 // Known project configurations (port mappings)
 const PROJECT_PORTS = {
