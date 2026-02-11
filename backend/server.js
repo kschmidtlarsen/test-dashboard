@@ -62,7 +62,8 @@ const PROJECT_PORTS = {
   'ical-adjuster': 3020,
   'calify': 3020,
   'kanban': 3010,
-  'test-dashboard': 3030
+  'test-dashboard': 3030,
+  'shopping-list': 3040
 };
 
 // Display names
@@ -72,7 +73,8 @@ const PROJECT_NAMES = {
   'ical-adjuster': 'iCal Adjuster',
   'calify': 'Calify Calendar Transformer',
   'kanban': 'Kanban Board',
-  'test-dashboard': 'Playwright Dashboard'
+  'test-dashboard': 'Playwright Dashboard',
+  'shopping-list': 'Grablist Shopping List'
 };
 
 // Results storage directory
