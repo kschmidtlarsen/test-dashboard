@@ -229,16 +229,12 @@ function updateCardProgress(projectId, state) {
   const card = document.querySelector(`[data-project-id="${projectId}"]`);
   if (!card) return;
 
-  // Update stat values
-  const passedEl = card.querySelector('.stat-value.passed');
-  const failedEl = card.querySelector('.stat-value.failed');
-  const skippedEl = card.querySelector('.stat-value.skipped');
-  const expectedTotalEl = card.querySelector('.expected-total');
-
-  if (passedEl) passedEl.textContent = state.passed;
-  if (failedEl) failedEl.textContent = state.failed;
-  if (skippedEl) skippedEl.textContent = state.skipped;
-  if (expectedTotalEl) expectedTotalEl.textContent = `(${state.expectedTotal})`;
+  // Update only the progress bar - stats stay at 0 until completion
+  const progressBar = card.querySelector('.progress-bar');
+  if (progressBar && state.expectedTotal > 0) {
+    const percent = Math.round((state.completed / state.expectedTotal) * 100);
+    progressBar.style.width = `${percent}%`;
+  }
 }
 
 function updateElapsedTimes() {
@@ -344,53 +340,25 @@ function renderSummaryCards() {
       statusText = data.status || 'Unknown';
     }
 
-    // Use running state values if running, otherwise use results
-    const passed = isRunning ? runState.passed : (data.passed || 0);
-    const failed = isRunning ? runState.failed : (data.failed || 0);
-    const skipped = isRunning ? runState.skipped : (data.skipped || 0);
+    // When running: show all zeros. When complete: show actual results
+    const passed = isRunning ? 0 : (data.passed || 0);
+    const failed = isRunning ? 0 : (data.failed || 0);
+    const skipped = isRunning ? 0 : (data.skipped || 0);
+    const total = isRunning ? 0 : (data.total || 0);
 
     // Footer text
     let footerText;
     if (isRunning) {
-      const elapsed = Math.floor((new Date() - runState.startTime) / 1000);
+      const elapsed = Math.max(0, Math.floor((new Date() - runState.startTime) / 1000));
       footerText = `Running: ${formatElapsedTime(elapsed)}`;
     } else {
       footerText = data.lastRun ? `Last run: ${formatDate(data.lastRun.timestamp)}` : 'Last run: Never';
     }
 
-    // Build stats HTML - different for running vs completed state
-    const statsHtml = isRunning ? `
-        <div class="stat">
-          <div class="stat-value passed">${passed}</div>
-          <div class="stat-label">Passed</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value failed">${failed}</div>
-          <div class="stat-label">Failed</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value skipped">${skipped}</div>
-          <div class="stat-label">Skipped</div>
-        </div>
-        <span class="expected-total">(${runState.expectedTotal})</span>
-    ` : `
-        <div class="stat">
-          <div class="stat-value passed">${passed}</div>
-          <div class="stat-label">Passed</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value failed">${failed}</div>
-          <div class="stat-label">Failed</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value skipped">${skipped}</div>
-          <div class="stat-label">Skipped</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value total">${data.total || 0}</div>
-          <div class="stat-label">Total</div>
-        </div>
-    `;
+    // Calculate progress percentage for running state
+    const progressPercent = isRunning && runState.expectedTotal > 0
+      ? Math.round((runState.completed / runState.expectedTotal) * 100)
+      : 0;
 
     card.innerHTML = `
       <div class="summary-card-header">
@@ -400,7 +368,25 @@ function renderSummaryCards() {
         </span>
       </div>
       <div class="summary-card-stats">
-        ${statsHtml}
+        <div class="stat">
+          <div class="stat-value passed">${passed}</div>
+          <div class="stat-label">Passed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value failed">${failed}</div>
+          <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value skipped">${skipped}</div>
+          <div class="stat-label">Skipped</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value total">${total}</div>
+          <div class="stat-label">Total</div>
+        </div>
+      </div>
+      <div class="progress-bar-container ${isRunning ? 'active' : ''}">
+        <div class="progress-bar" style="width: ${progressPercent}%"></div>
       </div>
       <div class="summary-card-footer">
         <span class="last-run" ${isRunning ? 'data-running="true"' : ''}>${footerText}</span>

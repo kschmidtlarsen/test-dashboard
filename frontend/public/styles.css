@@ -218,12 +218,26 @@ section h2 {
 .stat-value.skipped { color: var(--warning); }
 .stat-value.total { color: var(--text-primary); }
 
-.expected-total {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  align-self: center;
-  margin-left: auto;
-  font-weight: 500;
+.progress-bar-container {
+  height: 2px;
+  background: var(--border);
+  margin-bottom: 1rem;
+  border-radius: 1px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.progress-bar-container.active {
+  opacity: 1;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 1px;
+  transition: width 0.3s ease-out;
+  box-shadow: 0 0 8px var(--accent-primary);
 }
 
 .stat-label {
