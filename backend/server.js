@@ -463,6 +463,24 @@ async function runTestsForProject(projectId, config, grep) {
           }
         }
 
+        // Detect skipped tests: "  -  [chromium]" or lines with "skipped"
+        // Playwright shows skipped with a dash prefix
+        const skippedMatch = cleanLine.match(/^\s*-\s+\[/) || cleanLine.match(/^\s*-\s+\d+\s+skipped/);
+        if (skippedMatch && !cleanLine.includes('›')) {
+          // This is a skipped test indicator (not a progress line)
+          // Count skipped from summary line like "- 2 skipped"
+          const skippedCountMatch = cleanLine.match(/(\d+)\s+skipped/);
+          if (skippedCountMatch) {
+            const skippedNum = parseInt(skippedCountMatch[1]);
+            if (skippedNum > progress.skipped) {
+              progress.skipped = skippedNum;
+              progress.passed = progress.completed - progress.failed - progress.skipped;
+              console.log(`[${projectId}] Skipped detected: ${progress.skipped} skipped`);
+              broadcast('tests:progress', { projectId, ...progress, expectedTotal });
+            }
+          }
+        }
+
         // Line reporter format: "[1/38] [chromium] › file.spec.ts:10:5 › test name"
         const progressMatch = cleanLine.match(/\[(\d+)\/(\d+)\]/);
         if (progressMatch) {
