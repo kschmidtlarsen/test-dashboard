@@ -239,7 +239,7 @@ section h2 {
   transition: width 0.3s ease-out;
   box-shadow: 0 0 6px var(--accent-primary), 0 0 12px var(--accent-primary), 0 0 20px rgba(59, 130, 246, 0.5);
   position: absolute;
-  top: calc(1rem - 1px);
+  top: -1px;
   left: 0;
 }
 
