@@ -442,6 +442,9 @@ async function runTestsForProject(projectId, config, grep) {
       const chunk = data.toString();
       stderrBuffer += chunk;
 
+      // Debug: log raw stderr chunks
+      console.log(`[${projectId}] stderr chunk: ${chunk.substring(0, 200).replace(/\n/g, '\\n')}`);
+
       // Parse line output for progress
       const lines = stderrBuffer.split('\n');
       stderrBuffer = lines.pop(); // Keep incomplete line in buffer
@@ -450,7 +453,24 @@ async function runTestsForProject(projectId, config, grep) {
         // Line reporter format: "  ✓  1 [chromium] › file.spec.ts:10:5 › test name (1.2s)"
         // Or: "  ✘  2 [chromium] › file.spec.ts:20:5 › failed test (500ms)"
         // Or: "  -  3 [chromium] › file.spec.ts:30:5 › skipped test"
-        if (line.includes('✓') || line.includes('✔')) {
+        // Also check for "[1/38]" style progress indicators
+        const progressMatch = line.match(/\[(\d+)\/(\d+)\]/);
+        if (progressMatch) {
+          const current = parseInt(progressMatch[1]);
+          // Update completed count from progress indicator
+          if (current > progress.completed) {
+            if (line.includes('passed') || line.includes('✓') || line.includes('✔')) {
+              progress.passed = current - progress.failed - progress.skipped;
+            } else if (line.includes('failed') || line.includes('✘') || line.includes('✗')) {
+              progress.failed++;
+            } else if (line.includes('skipped')) {
+              progress.skipped++;
+            }
+            progress.completed = current;
+            console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal}`);
+            broadcast('tests:progress', { projectId, ...progress, expectedTotal });
+          }
+        } else if (line.includes('✓') || line.includes('✔')) {
           progress.passed++;
           progress.completed++;
           console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal} (✓ passed)`);
