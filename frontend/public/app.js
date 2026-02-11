@@ -233,12 +233,12 @@ function updateCardProgress(projectId, state) {
   const passedEl = card.querySelector('.stat-value.passed');
   const failedEl = card.querySelector('.stat-value.failed');
   const skippedEl = card.querySelector('.stat-value.skipped');
-  const totalEl = card.querySelector('.stat-value.total');
+  const expectedTotalEl = card.querySelector('.expected-total');
 
   if (passedEl) passedEl.textContent = state.passed;
   if (failedEl) failedEl.textContent = state.failed;
   if (skippedEl) skippedEl.textContent = state.skipped;
-  if (totalEl) totalEl.textContent = `${state.completed} / ${state.expectedTotal}`;
+  if (expectedTotalEl) expectedTotalEl.textContent = `(${state.expectedTotal})`;
 }
 
 function updateElapsedTimes() {
@@ -348,9 +348,6 @@ function renderSummaryCards() {
     const passed = isRunning ? runState.passed : (data.passed || 0);
     const failed = isRunning ? runState.failed : (data.failed || 0);
     const skipped = isRunning ? runState.skipped : (data.skipped || 0);
-    const total = isRunning
-      ? `${runState.completed} / ${runState.expectedTotal}`
-      : (data.total || 0);
 
     // Footer text
     let footerText;
@@ -361,14 +358,22 @@ function renderSummaryCards() {
       footerText = data.lastRun ? `Last run: ${formatDate(data.lastRun.timestamp)}` : 'Last run: Never';
     }
 
-    card.innerHTML = `
-      <div class="summary-card-header">
-        <span class="summary-card-title">${project.name}</span>
-        <span class="summary-card-status ${statusClass}">
-          ${statusText}
-        </span>
-      </div>
-      <div class="summary-card-stats">
+    // Build stats HTML - different for running vs completed state
+    const statsHtml = isRunning ? `
+        <div class="stat">
+          <div class="stat-value passed">${passed}</div>
+          <div class="stat-label">Passed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value failed">${failed}</div>
+          <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value skipped">${skipped}</div>
+          <div class="stat-label">Skipped</div>
+        </div>
+        <span class="expected-total">(${runState.expectedTotal})</span>
+    ` : `
         <div class="stat">
           <div class="stat-value passed">${passed}</div>
           <div class="stat-label">Passed</div>
@@ -382,9 +387,20 @@ function renderSummaryCards() {
           <div class="stat-label">Skipped</div>
         </div>
         <div class="stat">
-          <div class="stat-value total">${total}</div>
+          <div class="stat-value total">${data.total || 0}</div>
           <div class="stat-label">Total</div>
         </div>
+    `;
+
+    card.innerHTML = `
+      <div class="summary-card-header">
+        <span class="summary-card-title">${project.name}</span>
+        <span class="summary-card-status ${statusClass}">
+          ${statusText}
+        </span>
+      </div>
+      <div class="summary-card-stats">
+        ${statsHtml}
       </div>
       <div class="summary-card-footer">
         <span class="last-run" ${isRunning ? 'data-running="true"' : ''}>${footerText}</span>

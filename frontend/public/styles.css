@@ -218,6 +218,14 @@ section h2 {
 .stat-value.skipped { color: var(--warning); }
 .stat-value.total { color: var(--text-primary); }
 
+.expected-total {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  align-self: center;
+  margin-left: auto;
+  font-weight: 500;
+}
+
 .stat-label {
   font-size: 0.75rem;
   color: var(--text-secondary);
