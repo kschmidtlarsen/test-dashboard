@@ -431,62 +431,42 @@ async function runTestsForProject(projectId, config, grep) {
     });
 
     let stdout = '';
-    let stderrBuffer = '';
+    let stdoutBuffer = '';
 
+    // Line reporter outputs to stdout (along with JSON at the end)
+    // Parse stdout for progress indicators like [1/38]
     child.stdout.on('data', (data) => {
-      stdout += data;
-    });
-
-    // Line reporter outputs to stderr, parse it for progress
-    child.stderr.on('data', (data) => {
       const chunk = data.toString();
-      stderrBuffer += chunk;
+      stdout += chunk;
+      stdoutBuffer += chunk;
 
-      // Debug: log raw stderr chunks
-      console.log(`[${projectId}] stderr chunk: ${chunk.substring(0, 200).replace(/\n/g, '\\n')}`);
-
-      // Parse line output for progress
-      const lines = stderrBuffer.split('\n');
-      stderrBuffer = lines.pop(); // Keep incomplete line in buffer
+      // Parse for progress - look for [N/M] pattern
+      const lines = stdoutBuffer.split('\n');
+      stdoutBuffer = lines.pop(); // Keep incomplete line in buffer
 
       for (const line of lines) {
-        // Line reporter format: "  ✓  1 [chromium] › file.spec.ts:10:5 › test name (1.2s)"
-        // Or: "  ✘  2 [chromium] › file.spec.ts:20:5 › failed test (500ms)"
-        // Or: "  -  3 [chromium] › file.spec.ts:30:5 › skipped test"
-        // Also check for "[1/38]" style progress indicators
+        // Line reporter format: "[1/38] [chromium] › file.spec.ts:10:5 › test name"
         const progressMatch = line.match(/\[(\d+)\/(\d+)\]/);
         if (progressMatch) {
           const current = parseInt(progressMatch[1]);
+          const total = parseInt(progressMatch[2]);
+
           // Update completed count from progress indicator
           if (current > progress.completed) {
-            if (line.includes('passed') || line.includes('✓') || line.includes('✔')) {
-              progress.passed = current - progress.failed - progress.skipped;
-            } else if (line.includes('failed') || line.includes('✘') || line.includes('✗')) {
-              progress.failed++;
-            } else if (line.includes('skipped')) {
-              progress.skipped++;
-            }
             progress.completed = current;
-            console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal}`);
-            broadcast('tests:progress', { projectId, ...progress, expectedTotal });
+            // Assume passed unless we see failure indicators later
+            progress.passed = current - progress.failed - progress.skipped;
+            console.log(`[${projectId}] Progress: ${progress.completed}/${total}`);
+            broadcast('tests:progress', { projectId, ...progress, expectedTotal: total || expectedTotal });
           }
-        } else if (line.includes('✓') || line.includes('✔')) {
-          progress.passed++;
-          progress.completed++;
-          console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal} (✓ passed)`);
-          broadcast('tests:progress', { projectId, ...progress, expectedTotal });
-        } else if (line.includes('✘') || line.includes('✗')) {
-          progress.failed++;
-          progress.completed++;
-          console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal} (✘ failed)`);
-          broadcast('tests:progress', { projectId, ...progress, expectedTotal });
-        } else if (line.includes('-') && (line.includes('skipped') || line.match(/^\s+-\s+\d+/))) {
-          progress.skipped++;
-          progress.completed++;
-          console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal} (- skipped)`);
-          broadcast('tests:progress', { projectId, ...progress, expectedTotal });
         }
       }
+    });
+
+    // Capture stderr for error messages
+    child.stderr.on('data', (data) => {
+      // stderr may contain error details, just append to output
+      stdout += data;
     });
 
     child.on('close', (code) => {
