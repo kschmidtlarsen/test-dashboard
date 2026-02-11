@@ -432,6 +432,7 @@ async function runTestsForProject(projectId, config, grep) {
 
     let stdout = '';
     let stdoutBuffer = '';
+    let lastReportedCompleted = 0;
 
     // Line reporter outputs to stdout (along with JSON at the end)
     // Parse stdout for progress indicators like [1/38]
@@ -440,11 +441,25 @@ async function runTestsForProject(projectId, config, grep) {
       stdout += chunk;
       stdoutBuffer += chunk;
 
-      // Parse for progress - look for [N/M] pattern
+      // Parse for progress - look for [N/M] pattern and failure indicators
       const lines = stdoutBuffer.split('\n');
       stdoutBuffer = lines.pop(); // Keep incomplete line in buffer
 
       for (const line of lines) {
+        // Detect failure indicators: "  1) [chromium]" or lines with red ANSI codes
+        // Playwright shows failures as numbered list: "1)", "2)", etc.
+        const failureMatch = line.match(/^\s*(\d+)\)\s+\[/);
+        if (failureMatch) {
+          const failureNum = parseInt(failureMatch[1]);
+          if (failureNum > progress.failed) {
+            progress.failed = failureNum;
+            // Recalculate passed
+            progress.passed = progress.completed - progress.failed - progress.skipped;
+            console.log(`[${projectId}] Failure detected: ${progress.failed} failed`);
+            broadcast('tests:progress', { projectId, ...progress, expectedTotal });
+          }
+        }
+
         // Line reporter format: "[1/38] [chromium] › file.spec.ts:10:5 › test name"
         const progressMatch = line.match(/\[(\d+)\/(\d+)\]/);
         if (progressMatch) {
@@ -454,9 +469,9 @@ async function runTestsForProject(projectId, config, grep) {
           // Update completed count from progress indicator
           if (current > progress.completed) {
             progress.completed = current;
-            // Assume passed unless we see failure indicators later
+            // Calculate passed = completed - failed - skipped
             progress.passed = current - progress.failed - progress.skipped;
-            console.log(`[${projectId}] Progress: ${progress.completed}/${total}`);
+            console.log(`[${projectId}] Progress: ${progress.completed}/${total} (${progress.passed} passed, ${progress.failed} failed)`);
             broadcast('tests:progress', { projectId, ...progress, expectedTotal: total || expectedTotal });
           }
         }
