@@ -431,37 +431,43 @@ async function runTestsForProject(projectId, config, grep) {
     });
 
     let stdout = '';
-    let lineBuffer = '';
+    let stderrBuffer = '';
 
     child.stdout.on('data', (data) => {
       stdout += data;
-      lineBuffer += data.toString();
+    });
+
+    // Line reporter outputs to stderr, parse it for progress
+    child.stderr.on('data', (data) => {
+      const chunk = data.toString();
+      stderrBuffer += chunk;
 
       // Parse line output for progress
-      const lines = lineBuffer.split('\n');
-      lineBuffer = lines.pop(); // Keep incomplete line in buffer
+      const lines = stderrBuffer.split('\n');
+      stderrBuffer = lines.pop(); // Keep incomplete line in buffer
 
       for (const line of lines) {
         // Line reporter format: "  ✓  1 [chromium] › file.spec.ts:10:5 › test name (1.2s)"
         // Or: "  ✘  2 [chromium] › file.spec.ts:20:5 › failed test (500ms)"
         // Or: "  -  3 [chromium] › file.spec.ts:30:5 › skipped test"
-        if (line.includes('✓') || line.includes('✔') || line.match(/^\s+\d+\s+passed/)) {
+        if (line.includes('✓') || line.includes('✔')) {
           progress.passed++;
           progress.completed++;
+          console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal} (✓ passed)`);
           broadcast('tests:progress', { projectId, ...progress, expectedTotal });
-        } else if (line.includes('✘') || line.includes('✗') || line.match(/^\s+\d+\s+failed/)) {
+        } else if (line.includes('✘') || line.includes('✗')) {
           progress.failed++;
           progress.completed++;
+          console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal} (✘ failed)`);
           broadcast('tests:progress', { projectId, ...progress, expectedTotal });
-        } else if (line.includes('-') && line.includes('skipped')) {
+        } else if (line.includes('-') && (line.includes('skipped') || line.match(/^\s+-\s+\d+/))) {
           progress.skipped++;
           progress.completed++;
+          console.log(`[${projectId}] Progress: ${progress.completed}/${expectedTotal} (- skipped)`);
           broadcast('tests:progress', { projectId, ...progress, expectedTotal });
         }
       }
     });
-
-    child.stderr.on('data', (data) => { stdout += data; });
 
     child.on('close', (code) => {
       resolve({ stdout, exitCode: code || 0 });
