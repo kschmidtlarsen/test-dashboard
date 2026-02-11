@@ -1,7 +1,7 @@
 {
   "name": "test-dashboard",
   "version": "1.0.0",
-  "description": "Centralized E2E test dashboard for all platform projects",
+  "description": "Centralized Playwright test dashboard for all platform projects",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

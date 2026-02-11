@@ -34,7 +34,7 @@ const PROJECT_NAMES = {
   'crossfit-repo': 'CrossFit Generator',
   'ical-adjuster': 'iCal Adjuster',
   'kanban': 'Kanban Board',
-  'test-dashboard': 'Test Dashboard'
+  'test-dashboard': 'Playwright Dashboard'
 };
 
 // Results storage directory
@@ -451,7 +451,7 @@ app.get('*', (req, res) => {
 // Start server only if run directly (not imported for testing)
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Test Dashboard running on http://localhost:${PORT}`);
+    console.log(`Playwright Dashboard running on http://localhost:${PORT}`);
     ensureResultsDir();
 
     // Log discovered projects on startup

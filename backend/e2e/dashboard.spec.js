@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test.describe('Test Dashboard', () => {
+test.describe('Playwright Dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
   });
@@ -8,10 +8,10 @@ test.describe('Test Dashboard', () => {
   test('should load the dashboard with correct title', async ({ page }, testInfo) => {
     testInfo.annotations.push({
       type: 'description',
-      description: 'Verifies the page title is "E2E Test Dashboard" and the header h1 element displays the same text.'
+      description: 'Verifies the page title is "Playwright Dashboard" and the header h1 element displays the same text.'
     });
-    await expect(page).toHaveTitle('E2E Test Dashboard');
-    await expect(page.locator('header h1')).toHaveText('E2E Test Dashboard');
+    await expect(page).toHaveTitle('Playwright Dashboard');
+    await expect(page.locator('header h1')).toHaveText('Playwright Dashboard');
   });
 
   test('should display header action buttons', async ({ page }, testInfo) => {
