@@ -561,34 +561,54 @@ async function runTestsForProject(projectId, config, grep) {
     };
   }
 
-  // Calculate stats from JSON results (more accurate than line parsing)
-  const stats = {
-    total: 0,
-    passed: 0,
-    failed: 0,
-    skipped: 0,
-    duration
-  };
+  // Use Playwright's summary stats (more accurate than counting individual test statuses)
+  // Playwright's stats object contains: expected, unexpected, skipped, flaky
+  // - expected = passed tests
+  // - unexpected = failed tests
+  // - skipped = programmatically skipped tests
+  let stats;
 
-  function countResults(suites) {
-    for (const suite of suites || []) {
-      for (const spec of suite.specs || []) {
-        for (const test of spec.tests || []) {
-          stats.total++;
-          const status = test.results?.[0]?.status || 'unknown';
-          if (status === 'passed' || status === 'expected') {
-            stats.passed++;
-          } else if (status === 'failed' || status === 'unexpected') {
-            stats.failed++;
-          } else if (status === 'skipped') {
-            stats.skipped++;
+  if (results.stats && typeof results.stats.expected === 'number') {
+    // Use Playwright's built-in stats summary
+    stats = {
+      total: (results.stats.expected || 0) + (results.stats.unexpected || 0) + (results.stats.skipped || 0),
+      passed: results.stats.expected || 0,
+      failed: results.stats.unexpected || 0,
+      skipped: results.stats.skipped || 0,
+      duration
+    };
+    console.log(`Using Playwright summary stats: ${stats.passed} passed, ${stats.failed} failed, ${stats.skipped} skipped`);
+  } else {
+    // Fallback: count individual test results
+    stats = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      duration
+    };
+
+    function countResults(suites) {
+      for (const suite of suites || []) {
+        for (const spec of suite.specs || []) {
+          for (const test of spec.tests || []) {
+            stats.total++;
+            const status = test.results?.[0]?.status || 'unknown';
+            if (status === 'passed' || status === 'expected') {
+              stats.passed++;
+            } else if (status === 'failed' || status === 'unexpected') {
+              stats.failed++;
+            } else if (status === 'skipped') {
+              stats.skipped++;
+            }
           }
         }
+        countResults(suite.suites);
       }
-      countResults(suite.suites);
     }
+    countResults(results.suites);
+    console.log(`Using counted stats: ${stats.passed} passed, ${stats.failed} failed, ${stats.skipped} skipped`);
   }
-  countResults(results.suites);
 
   // Create run record
   const run = {
