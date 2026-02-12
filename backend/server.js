@@ -465,28 +465,13 @@ async function runTestsForProject(projectId, config, grep) {
           }
         }
 
-        // Detect skipped tests - multiple patterns:
-        // 1. Summary line: "X skipped"
-        // 2. Individual skipped test with dash: "[N/M] -  [chromium]"
-        // 3. Line contains "skipped" after progress marker
-        const skippedCountMatch = cleanLine.match(/(\d+)\s+skipped/i);
-        if (skippedCountMatch) {
-          const skippedNum = parseInt(skippedCountMatch[1]);
-          if (skippedNum > progress.skipped) {
-            progress.skipped = skippedNum;
-            progress.passed = progress.completed - progress.failed - progress.skipped;
-            console.log(`[${projectId}] Skipped summary detected: ${progress.skipped} skipped`);
-            broadcast('tests:progress', { projectId, ...progress, expectedTotal });
-          }
-        }
-
-        // Detect individual skipped test: line with progress marker followed by "-" or contains "skipped"
-        // Format: "[N/M] -  [browser]" or "[N/M] ... skipped" or "-  [browser]"
-        // Extract test number to avoid double-counting
+        // Detect individual skipped test during progress (indicated by "-" prefix)
+        // Format: "-  [browser] › file.spec.ts" (skipped test in list output)
+        // Note: We no longer parse "X skipped" summary lines during progress since
+        // that value can be misleading. Final stats use Playwright's official stats object.
         const skipProgressMatch = cleanLine.match(/\[(\d+)\/\d+\]/);
         const isSkipLine = cleanLine.match(/\[\d+\/\d+\]\s*-\s+\[/) ||
-                           cleanLine.match(/^\s*-\s+\[.*\]\s+›/) ||
-                           (skipProgressMatch && cleanLine.toLowerCase().includes('skipped'));
+                           cleanLine.match(/^\s*-\s+\[.*\]\s+›/);
         if (isSkipLine && skipProgressMatch) {
           const testNum = parseInt(skipProgressMatch[1]);
           if (!seenSkippedTests.has(testNum)) {
