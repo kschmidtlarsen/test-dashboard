@@ -1,9 +1,10 @@
 const { Pool } = require('pg');
 
 // Create connection pool
+// Neon requires SSL - always enable it when DATABASE_URL is set
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
 // Test connection on startup
