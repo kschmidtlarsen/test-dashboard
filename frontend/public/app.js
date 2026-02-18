@@ -1,23 +1,16 @@
 // API Base URL
 const API_BASE = window.location.origin;
 
-// WebSocket connection
-let ws = null;
-let wsReconnectAttempts = 0;
-const WS_MAX_RECONNECT_ATTEMPTS = 5;
-const WS_RECONNECT_DELAY = 3000;
+// Polling configuration
+const POLL_INTERVAL = 30000; // 30 seconds
+let pollInterval = null;
+let lastUpdateTimestamp = null;
 
 // State
 let projects = [];
 let results = {};
 let expandedProjects = new Set();
 let expandedTests = new Set();
-
-// Running project state: { projectId: { startTime, expectedTotal, passed, failed, skipped, completed } }
-const runningProjectState = new Map();
-
-// Elapsed time update interval
-let elapsedTimeInterval = null;
 
 // DOM Elements
 const summaryCards = document.getElementById('summaryCards');
@@ -30,41 +23,39 @@ const refreshBtn = document.getElementById('refreshBtn');
 const loadingOverlay = document.getElementById('loadingOverlay');
 const toast = document.getElementById('toast');
 
-// WebSocket setup
-function connectWebSocket() {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${wsProtocol}//${window.location.host}`;
+// Polling for updates
+async function checkForUpdates() {
+  try {
+    const url = lastUpdateTimestamp
+      ? `${API_BASE}/api/poll?since=${encodeURIComponent(lastUpdateTimestamp)}`
+      : `${API_BASE}/api/poll`;
 
-  ws = new WebSocket(wsUrl);
+    const res = await fetch(url);
+    const data = await res.json();
 
-  ws.onopen = () => {
-    console.log('WebSocket connected');
-    wsReconnectAttempts = 0;
-    updateConnectionStatus(true);
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const message = JSON.parse(event.data);
-      handleWebSocketMessage(message);
-    } catch (err) {
-      console.error('Failed to parse WebSocket message:', err);
+    if (data.hasUpdates || !lastUpdateTimestamp) {
+      lastUpdateTimestamp = data.latest;
+      await loadResults();
+      updateConnectionStatus(true);
     }
-  };
-
-  ws.onclose = () => {
-    console.log('WebSocket disconnected');
+  } catch (err) {
+    console.error('Polling error:', err);
     updateConnectionStatus(false);
-    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      wsReconnectAttempts++;
-      console.log(`Reconnecting... attempt ${wsReconnectAttempts}`);
-      setTimeout(connectWebSocket, WS_RECONNECT_DELAY);
-    }
-  };
+  }
+}
 
-  ws.onerror = (err) => {
-    console.error('WebSocket error:', err);
-  };
+function startPolling() {
+  if (!pollInterval) {
+    pollInterval = setInterval(checkForUpdates, POLL_INTERVAL);
+    updateConnectionStatus(true);
+  }
+}
+
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
 }
 
 function updateConnectionStatus(connected) {
@@ -72,183 +63,7 @@ function updateConnectionStatus(connected) {
   if (statusEl) {
     statusEl.classList.toggle('connected', connected);
     statusEl.classList.toggle('disconnected', !connected);
-    statusEl.title = connected ? 'Connected - Real-time updates active' : 'Disconnected - Reconnecting...';
-  }
-}
-
-function handleWebSocketMessage(message) {
-  const { event, data } = message;
-
-  switch (event) {
-    case 'tests:started':
-      handleTestsStarted(data);
-      break;
-
-    case 'tests:progress':
-      handleTestsProgress(data);
-      break;
-
-    case 'tests:completed':
-      handleTestsCompleted(data);
-      break;
-
-    case 'tests:error':
-      handleTestsError(data);
-      break;
-
-    case 'results:uploaded':
-      handleResultsUploaded(data);
-      break;
-
-    default:
-      console.log('Unknown WebSocket event:', event);
-  }
-}
-
-function handleTestsStarted(data) {
-  const { projectId, expectedTotal, startTime, grep } = data;
-
-  // Initialize running state
-  runningProjectState.set(projectId, {
-    startTime: new Date(startTime),
-    expectedTotal: expectedTotal || 0,
-    passed: 0,
-    failed: 0,
-    skipped: 0,
-    completed: 0
-  });
-
-  showToast(`Tests started for ${projectId}${grep ? ` (${grep})` : ''} - ${expectedTotal} tests`, 'info');
-
-  // Update card to show running state with zeroed counters
-  updateCardForRunning(projectId);
-
-  // Grey out results section for this project
-  updateResultsRunningState(projectId, true);
-
-  // Start elapsed time updates if not already running
-  startElapsedTimeUpdates();
-}
-
-function handleTestsProgress(data) {
-  const { projectId, passed, failed, skipped, completed, expectedTotal } = data;
-
-  const state = runningProjectState.get(projectId);
-  if (state) {
-    state.passed = passed;
-    state.failed = failed;
-    state.skipped = skipped;
-    state.completed = completed;
-    state.expectedTotal = expectedTotal;
-
-    // Update the card with new progress
-    updateCardProgress(projectId, state);
-  }
-}
-
-function handleTestsCompleted(data) {
-  const { projectId, run } = data;
-
-  // Remove from running state
-  runningProjectState.delete(projectId);
-
-  showToast(
-    `Tests completed for ${projectId}: ${run.stats.passed}/${run.stats.total} passed`,
-    run.stats.failed > 0 ? 'error' : 'success'
-  );
-
-  // Stop elapsed time updates if no more running projects
-  if (runningProjectState.size === 0) {
-    stopElapsedTimeUpdates();
-  }
-
-  // Un-grey results section
-  updateResultsRunningState(projectId, false);
-
-  // Refresh all results to get the final data
-  loadResults();
-}
-
-function handleTestsError(data) {
-  const { projectId, error } = data;
-
-  runningProjectState.delete(projectId);
-  showToast(`Test error for ${projectId}: ${error}`, 'error');
-
-  if (runningProjectState.size === 0) {
-    stopElapsedTimeUpdates();
-  }
-
-  updateResultsRunningState(projectId, false);
-  renderSummaryCards();
-}
-
-function handleResultsUploaded(data) {
-  const { projectId, run } = data;
-  showToast(
-    `Results uploaded for ${projectId}: ${run.stats.passed}/${run.stats.total} passed`,
-    'success'
-  );
-  loadResults();
-}
-
-function updateCardForRunning(projectId) {
-  // Re-render all cards to show the running state with zeroed stats and progress bar
-  renderSummaryCards();
-}
-
-function updateCardProgress(projectId, state) {
-  const card = document.querySelector(`[data-project-id="${projectId}"]`);
-  if (!card) return;
-
-  // Update only the progress bar - stats stay at 0 until completion
-  const progressBar = card.querySelector('.progress-bar');
-  if (progressBar && state.expectedTotal > 0) {
-    const percent = Math.round((state.completed / state.expectedTotal) * 100);
-    progressBar.style.width = `${percent}%`;
-  }
-}
-
-function updateElapsedTimes() {
-  const now = new Date();
-
-  for (const [projectId, state] of runningProjectState) {
-    const card = document.querySelector(`[data-project-id="${projectId}"]`);
-    if (!card) continue;
-
-    const lastRunEl = card.querySelector('.last-run');
-    if (lastRunEl && lastRunEl.getAttribute('data-running') === 'true') {
-      // Ensure elapsed is never negative (handles clock skew between server/client)
-      const elapsed = Math.max(0, Math.floor((now - state.startTime) / 1000));
-      lastRunEl.textContent = `Running: ${formatElapsedTime(elapsed)}`;
-    }
-  }
-}
-
-function formatElapsedTime(seconds) {
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
-}
-
-function startElapsedTimeUpdates() {
-  if (!elapsedTimeInterval) {
-    elapsedTimeInterval = setInterval(updateElapsedTimes, 1000);
-  }
-}
-
-function stopElapsedTimeUpdates() {
-  if (elapsedTimeInterval) {
-    clearInterval(elapsedTimeInterval);
-    elapsedTimeInterval = null;
-  }
-}
-
-function updateResultsRunningState(projectId, isRunning) {
-  const resultsEl = document.querySelector(`.project-results[data-results-project="${projectId}"]`);
-  if (resultsEl) {
-    resultsEl.classList.toggle('running-disabled', isRunning);
+    statusEl.title = connected ? 'Auto-refresh active (30s)' : 'Connection issue - click Refresh';
   }
 }
 
@@ -257,7 +72,7 @@ async function init() {
   await loadProjects();
   await loadResults();
   setupEventListeners();
-  connectWebSocket();
+  startPolling();
 }
 
 // Load projects
@@ -299,38 +114,16 @@ function renderSummaryCards() {
     card.className = 'summary-card';
     card.setAttribute('data-project-id', project.id);
 
-    const isRunning = runningProjectState.has(project.id);
-    const runState = runningProjectState.get(project.id);
+    const statusClass = data.status === 'failed' ? 'status-failed' :
+                        data.status === 'passed' ? 'status-passed' : 'status-unknown';
+    const statusText = data.status || 'Unknown';
 
-    let statusClass, statusText;
-    if (isRunning) {
-      statusClass = 'status-running';
-      statusText = 'Running';
-    } else {
-      statusClass = data.status === 'failed' ? 'status-failed' :
-                    data.status === 'passed' ? 'status-passed' : 'status-unknown';
-      statusText = data.status || 'Unknown';
-    }
+    const passed = data.passed || 0;
+    const failed = data.failed || 0;
+    const skipped = data.skipped || 0;
+    const total = data.total || 0;
 
-    // When running: show all zeros. When complete: show actual results
-    const passed = isRunning ? 0 : (data.passed || 0);
-    const failed = isRunning ? 0 : (data.failed || 0);
-    const skipped = isRunning ? 0 : (data.skipped || 0);
-    const total = isRunning ? 0 : (data.total || 0);
-
-    // Footer text
-    let footerText;
-    if (isRunning) {
-      const elapsed = Math.max(0, Math.floor((new Date() - runState.startTime) / 1000));
-      footerText = `Running: ${formatElapsedTime(elapsed)}`;
-    } else {
-      footerText = data.lastRun ? `Last run: ${formatDate(data.lastRun.timestamp)}` : 'Last run: Never';
-    }
-
-    // Calculate progress percentage for running state
-    const progressPercent = isRunning && runState.expectedTotal > 0
-      ? Math.round((runState.completed / runState.expectedTotal) * 100)
-      : 0;
+    const footerText = data.lastRun ? `Last run: ${formatDate(data.lastRun.timestamp)}` : 'Last run: Never';
 
     card.innerHTML = `
       <div class="summary-card-header">
@@ -357,18 +150,14 @@ function renderSummaryCards() {
           <div class="stat-label">Total</div>
         </div>
       </div>
-      <div class="progress-bar-container ${isRunning ? 'active' : ''}">
-        <div class="progress-bar" style="width: ${progressPercent}%"></div>
-      </div>
       <div class="summary-card-footer">
-        <span class="last-run" ${isRunning ? 'data-running="true"' : ''}>${footerText}</span>
-        ${project.canRunFromUI === false
-          ? `<button class="btn btn-sm btn-secondary run-btn" disabled title="Tests run via CI/CD pipeline">CI/CD Only</button>`
-          : `<button class="btn btn-sm btn-primary run-btn ${isRunning ? 'running' : ''}"
-                onclick="runTests('${project.id}')" ${isRunning ? 'disabled' : ''}>
-              ${isRunning ? 'Running...' : 'Run Tests'}
-            </button>`
-        }
+        <span class="last-run">${footerText}</span>
+        <a href="https://github.com/kschmidtlarsen/${project.id}/actions/workflows/e2e-manual.yml"
+           target="_blank"
+           class="btn btn-sm btn-primary run-btn"
+           title="Run tests via GitHub Actions">
+          Run Tests ↗
+        </a>
       </div>
     `;
 
@@ -387,20 +176,18 @@ async function renderResults() {
     projects : projects.filter(p => p.id === selectedProject);
 
   for (const project of projectsToShow) {
-    const isRunning = runningProjectState.has(project.id);
-
     try {
       const res = await fetch(`${API_BASE}/api/results/${project.id}`);
       const data = await res.json();
 
       if (!data.lastRun) {
         const div = document.createElement('div');
-        div.className = `project-results ${isRunning ? 'running-disabled' : ''}`;
+        div.className = 'project-results';
         div.setAttribute('data-results-project', project.id);
         div.innerHTML = `
           <div class="project-header">
             <span class="project-name">${project.name}</span>
-            <span class="project-summary">${isRunning ? 'Tests running...' : 'No tests run yet'}</span>
+            <span class="project-summary">No tests run yet</span>
           </div>
         `;
         resultsContainer.appendChild(div);
@@ -408,20 +195,18 @@ async function renderResults() {
       }
 
       const tests = extractTests(data.lastRun.suites, selectedStatus);
-      const isExpanded = expandedProjects.has(project.id) && !isRunning;
+      const isExpanded = expandedProjects.has(project.id);
 
       const div = document.createElement('div');
-      div.className = `project-results ${isRunning ? 'running-disabled' : ''}`;
+      div.className = 'project-results';
       div.setAttribute('data-results-project', project.id);
       div.innerHTML = `
-        <div class="project-header" onclick="${isRunning ? '' : `toggleProject('${project.id}')`}" style="${isRunning ? 'cursor: not-allowed;' : ''}">
+        <div class="project-header" onclick="toggleProject('${project.id}')">
           <span class="project-name">${project.name}</span>
           <div class="project-summary">
-            ${isRunning ? '<span class="running-indicator">Tests running...</span>' : `
             <span style="color: var(--success)">✓ ${data.lastRun.stats.passed}</span>
             <span style="color: var(--error)">✗ ${data.lastRun.stats.failed}</span>
             <span style="color: var(--warning)">○ ${data.lastRun.stats.skipped}</span>
-            `}
           </div>
         </div>
         <div class="test-list ${isExpanded ? 'expanded' : ''}" id="tests-${project.id}">
@@ -471,7 +256,7 @@ async function renderResults() {
     resultsContainer.innerHTML = `
       <div class="empty-state">
         <p>No test results available</p>
-        <button class="btn btn-primary" onclick="runAllTests()">Run Tests</button>
+        <p>Run tests via GitHub Actions to see results here.</p>
       </div>
     `;
   }
@@ -584,9 +369,6 @@ async function renderHistory() {
 
 // Toggle project expansion
 function toggleProject(projectId) {
-  // Don't allow expansion while running
-  if (runningProjectState.has(projectId)) return;
-
   if (expandedProjects.has(projectId)) {
     expandedProjects.delete(projectId);
   } else {
@@ -599,82 +381,20 @@ function toggleProject(projectId) {
   }
 }
 
-// Run tests for a single project
-async function runTests(projectId) {
-  // Mark as pending in UI immediately
-  const card = document.querySelector(`[data-project-id="${projectId}"]`);
-  if (card) {
-    const btn = card.querySelector('.run-btn');
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Starting...';
-    }
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/api/run/${projectId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      showToast(data.error || 'Failed to start tests', 'error');
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Run Tests';
-      }
-      return;
-    }
-
-    // WebSocket will handle tests:started with expectedTotal
-  } catch (err) {
-    showToast('Failed to start tests', 'error');
-    if (card) {
-      const btn = card.querySelector('.run-btn');
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Run Tests';
-      }
-    }
-  }
-}
-
-// Run all tests
-async function runAllTests() {
-  try {
-    const res = await fetch(`${API_BASE}/api/run-all`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const data = await res.json();
-
-    // Mark buttons as starting
-    if (data.projects) {
-      data.projects.forEach(projectId => {
-        const card = document.querySelector(`[data-project-id="${projectId}"]`);
-        if (card) {
-          const btn = card.querySelector('.run-btn');
-          if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Starting...';
-          }
-        }
-      });
-    }
-
-    showToast('Running tests for all projects...', 'success');
-  } catch (err) {
-    showToast('Failed to start tests', 'error');
-  }
+// Open GitHub Actions to run all tests
+function runAllTests() {
+  window.open('https://github.com/kschmidtlarsen?tab=repositories', '_blank');
+  showToast('Opening GitHub - select a repo and run the E2E workflow', 'info');
 }
 
 // Setup event listeners
 function setupEventListeners() {
   runAllBtn.addEventListener('click', runAllTests);
-  refreshBtn.addEventListener('click', loadResults);
+  refreshBtn.addEventListener('click', async () => {
+    showToast('Refreshing...', 'info');
+    await loadResults();
+    showToast('Results refreshed', 'success');
+  });
   projectFilter.addEventListener('change', renderResults);
   statusFilter.addEventListener('change', renderResults);
 }
@@ -721,8 +441,6 @@ function showToast(message, type = 'info') {
 }
 
 // Make functions available globally
-window.runTests = runTests;
-window.runAllTests = runAllTests;
 window.toggleProject = toggleProject;
 window.toggleTestDetails = toggleTestDetails;
 

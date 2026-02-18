@@ -18,9 +18,9 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-const DASHBOARD_URL = process.argv[2] || process.env.DASHBOARD_URL || 'http://192.168.0.120:3030';
-const E2E_BASE_URL = process.env.E2E_BASE_URL || 'http://192.168.0.120:3030';
-const PROJECT_ID = 'test-dashboard';
+const DASHBOARD_URL = process.argv[2] || process.env.DASHBOARD_URL || 'https://playwright.vercel.app';
+const E2E_BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3030';
+const PROJECT_ID = process.env.PROJECT_ID || 'playwright-dashboard';
 
 async function runTests() {
   console.log(`Running E2E tests against ${E2E_BASE_URL}...`);
