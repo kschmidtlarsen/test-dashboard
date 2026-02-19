@@ -162,6 +162,17 @@ module.exports = async (req, res) => {
   }
   const route = '/' + pathParts.join('/');
 
+  // Debug route
+  if (route === '/debug' || pathParts[0] === 'debug') {
+    return res.json({
+      pathParts,
+      route,
+      queryPath: req.query.path,
+      url: req.url,
+      method: req.method
+    });
+  }
+
   // Route: GET /checklists
   if (route === '/checklists' && req.method === 'GET') {
     try {
