@@ -165,21 +165,6 @@ module.exports = async (req, res) => {
   }
   const route = '/' + pathParts.join('/');
 
-  // Always log for debugging
-  console.log('Manual API called:', { pathParts, route, url: req.url, method: req.method });
-
-  // Debug route - match any path starting with debug
-  if (pathParts.length === 0 || pathParts[0] === 'debug') {
-    return res.json({
-      pathParts,
-      route,
-      queryPath: req.query.path,
-      queryAll: req.query,
-      url: req.url,
-      method: req.method
-    });
-  }
-
   // Route: GET /checklists
   if (route === '/checklists' && req.method === 'GET') {
     try {
