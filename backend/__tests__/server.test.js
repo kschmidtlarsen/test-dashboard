@@ -173,7 +173,7 @@ describe('API Endpoints', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
         status: 'healthy',
-        service: 'test-dashboard'
+        service: 'playwright-dashboard'
       });
     });
   });

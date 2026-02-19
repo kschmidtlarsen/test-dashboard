@@ -206,14 +206,14 @@ test.describe('API Health', () => {
   test('health endpoint should return healthy status', async ({ request }, testInfo) => {
     testInfo.annotations.push({
       type: 'description',
-      description: 'Calls GET /health and verifies response contains {status: "healthy", service: "test-dashboard"}.'
+      description: 'Calls GET /health and verifies response contains {status: "healthy", service: "playwright-dashboard"}.'
     });
     const response = await request.get('/health');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
     expect(data.status).toBe('healthy');
-    expect(data.service).toBe('test-dashboard');
+    expect(data.service).toBe('playwright-dashboard');
   });
 
   test('projects endpoint should return array', async ({ request }, testInfo) => {

@@ -42,33 +42,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  deploy:
-    needs: lint-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to Pi Cluster
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 192.168.0.120
-          username: kristian
-          password: ${{ secrets.PI_PASSWORD }}
-          script: |
-            cd /var/www/test-dashboard
-            git stash
-            git pull origin main
-            cd backend && npm ci --production
-            pm2 restart test-dashboard
-
-      - name: Verify Deployment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 192.168.0.120
-          username: kristian
-          password: ${{ secrets.PI_PASSWORD }}
-          script: |
-            pm2 status test-dashboard
-            curl -sf http://localhost:3030/health
+  # Deployment handled by Vercel auto-deploy on push to main
