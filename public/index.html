@@ -116,6 +116,7 @@
             </div>
             <div class="session-actions">
               <button id="addCustomItemBtn" class="btn btn-secondary btn-sm">+ Add Item</button>
+              <button id="cancelSessionBtn" class="btn btn-secondary">Cancel</button>
               <button id="completeSessionBtn" class="btn btn-primary">Complete Session</button>
             </div>
           </div>
@@ -152,8 +153,14 @@
             </div>
             <div class="modal-body">
               <div class="form-group">
-                <label for="customItemCategory">Category</label>
-                <input type="text" id="customItemCategory" placeholder="e.g., Custom Tests">
+                <label for="customItemCategorySelect">Category</label>
+                <select id="customItemCategorySelect">
+                  <option value="">-- Select category --</option>
+                </select>
+              </div>
+              <div class="form-group hidden" id="newCategoryGroup">
+                <label for="customItemCategoryNew">New Category Name</label>
+                <input type="text" id="customItemCategoryNew" placeholder="e.g., Custom Tests" class="hidden">
               </div>
               <div class="form-group">
                 <label for="customItemTitle">Test Description</label>

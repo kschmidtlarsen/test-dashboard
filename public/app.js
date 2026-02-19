@@ -689,7 +689,6 @@ function renderChecklist() {
 
       html += '<div class="checklist-item ' + statusClass + isCustom + '" data-item-id="' + item.id + '">';
       html += '<div class="item-content">';
-      html += '<span class="item-checkbox">' + getCheckboxIcon(item.status) + '</span>';
       html += '<span class="item-title">' + item.title + '</span>';
       if (item.isCustom) html += '<span class="custom-badge">Custom</span>';
       html += '</div>';
@@ -834,12 +833,52 @@ async function confirmFail() {
 // Add custom item modal
 function openAddItemModal() {
   var modal = document.getElementById('addItemModal');
-  var catInput = document.getElementById('customItemCategory');
+  var catSelect = document.getElementById('customItemCategorySelect');
+  var catInput = document.getElementById('customItemCategoryNew');
   var titleInput = document.getElementById('customItemTitle');
 
-  if (catInput) catInput.value = '';
+  // Get existing categories from current session
+  if (catSelect && currentSession && currentSession.items) {
+    var categories = [];
+    currentSession.items.forEach(function(item) {
+      var cat = item.category || 'Uncategorized';
+      if (categories.indexOf(cat) === -1) categories.push(cat);
+    });
+
+    catSelect.innerHTML = '<option value="">-- Select category --</option>';
+    categories.forEach(function(cat) {
+      catSelect.innerHTML += '<option value="' + escapeHtml(cat) + '">' + cat + '</option>';
+    });
+    catSelect.innerHTML += '<option value="__new__">+ Create new category</option>';
+    catSelect.value = '';
+  }
+
+  var catGroup = document.getElementById('newCategoryGroup');
+  if (catGroup) catGroup.classList.add('hidden');
+  if (catInput) {
+    catInput.value = '';
+    catInput.classList.add('hidden');
+  }
   if (titleInput) titleInput.value = '';
   if (modal) modal.classList.remove('hidden');
+}
+
+// Handle category select change
+function onCategorySelectChange() {
+  var catSelect = document.getElementById('customItemCategorySelect');
+  var catGroup = document.getElementById('newCategoryGroup');
+  var catInput = document.getElementById('customItemCategoryNew');
+
+  if (catSelect && catGroup && catInput) {
+    if (catSelect.value === '__new__') {
+      catGroup.classList.remove('hidden');
+      catInput.classList.remove('hidden');
+      catInput.focus();
+    } else {
+      catGroup.classList.add('hidden');
+      catInput.classList.add('hidden');
+    }
+  }
 }
 
 function closeAddItemModal() {
@@ -848,10 +887,18 @@ function closeAddItemModal() {
 }
 
 async function confirmAddItem() {
-  var catInput = document.getElementById('customItemCategory');
+  var catSelect = document.getElementById('customItemCategorySelect');
+  var catInput = document.getElementById('customItemCategoryNew');
   var titleInput = document.getElementById('customItemTitle');
 
-  var category = catInput ? catInput.value.trim() : 'Custom';
+  var category;
+  if (catSelect && catSelect.value === '__new__') {
+    category = catInput ? catInput.value.trim() : 'Custom';
+  } else {
+    category = catSelect ? catSelect.value : 'Custom';
+  }
+  if (!category) category = 'Custom';
+
   var title = titleInput ? titleInput.value.trim() : '';
 
   if (!title) {
@@ -881,6 +928,39 @@ async function confirmAddItem() {
     showToast('Item added', 'success');
   } catch (err) {
     console.error('Failed to add item:', err);
+    showToast(err.message, 'error');
+  }
+}
+
+// Cancel session
+async function cancelSession() {
+  if (!currentSession) return;
+
+  if (!confirm('Are you sure you want to cancel this session? Progress will be saved.')) {
+    return;
+  }
+
+  try {
+    var res = await fetch(API_BASE + '/api/manual/sessions/' + currentSession.sessionId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' })
+    });
+
+    if (!res.ok) {
+      var err = await res.json();
+      throw new Error(err.error || 'Failed to cancel session');
+    }
+
+    showToast('Session cancelled', 'info');
+
+    // Return to start view
+    currentSession = null;
+    if (manualSessionView) manualSessionView.classList.add('hidden');
+    if (manualStartView) manualStartView.classList.remove('hidden');
+    loadManualTestData();
+  } catch (err) {
+    console.error('Failed to cancel session:', err);
     showToast(err.message, 'error');
   }
 }
@@ -1027,6 +1107,18 @@ function setupManualTestListeners() {
   var completeSessionBtn = document.getElementById('completeSessionBtn');
   if (completeSessionBtn) {
     completeSessionBtn.addEventListener('click', completeSession);
+  }
+
+  // Cancel session button
+  var cancelSessionBtn = document.getElementById('cancelSessionBtn');
+  if (cancelSessionBtn) {
+    cancelSessionBtn.addEventListener('click', cancelSession);
+  }
+
+  // Category select change handler
+  var catSelect = document.getElementById('customItemCategorySelect');
+  if (catSelect) {
+    catSelect.addEventListener('change', onCategorySelectChange);
   }
 
   // Confirm fail button
